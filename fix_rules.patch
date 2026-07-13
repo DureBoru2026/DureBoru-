@@ -1,0 +1,14 @@
+--- firestore.rules
++++ firestore.rules
+@@ -14,8 +14,9 @@
+ 
+     // Admin helper - check role in users collection
+     function isAdmin() {
+-      return isSignedIn() && 
+-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
++      return isSignedIn() &&
++         exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
++         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+     }
+ 
+     // User Profiles

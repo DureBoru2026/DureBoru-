@@ -1,0 +1,6 @@
+{
+  "name": "Dure Boru - Ethiopia & Global Digital Development Platform",
+  "description": "The official biography, modern agriculture, and digital storefront platform of Jemal Fano Haji. Features dual-language Afan Oromo and English support, digital academy uploads, modern agriculture marketplace, and unified Dure Pay gateway simulation.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,115 @@
+{
+  "entities": {
+    "product": {
+      "title": "Product",
+      "description": "Store items for the marketplace",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Product name" },
+        "description": { "type": "string", "description": "Product description" },
+        "price": { "type": "number", "description": "Product price in ETB" },
+        "category": { "type": "string", "description": "Product category" },
+        "imageUrl": { "type": "string", "description": "URL to product image" },
+        "type": { "type": "string", "description": "Product type: 'physical' or 'digital'" },
+        "assetType": { "type": "string", "description": "For digital: 'software', 'video', 'pdf', etc." },
+        "fileUrl": { "type": "string", "description": "Link to the digital file" },
+        "videoUrl": { "type": "string", "description": "Optional video embed URL" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation time" }
+      },
+      "required": ["name", "price", "category", "createdAt"]
+    },
+    "user": {
+      "title": "User",
+      "description": "User profile information",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "description": "User email" },
+        "role": { "type": "string", "description": "User role: 'admin' or 'user'" },
+        "displayName": { "type": "string", "description": "User display name" },
+        "photoURL": { "type": "string", "description": "User avatar URL" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Account creation time" }
+      },
+      "required": ["email", "displayName", "createdAt"]
+    },
+    "order": {
+      "title": "Order",
+      "description": "Purchase records",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "ID of the buyer" },
+        "productId": { "type": "string", "description": "ID of the product" },
+        "productName": { "type": "string", "description": "Snapshot of product name" },
+        "amount": { "type": "number", "description": "Paid amount" },
+        "status": { "type": "string", "description": "Order status" },
+        "downloadUrl": { "type": "string", "description": "Link to download if digital" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Transaction time" }
+      },
+      "required": ["userId", "productId", "amount", "status", "createdAt"]
+    },
+    "post": {
+      "title": "Post",
+      "description": "Community social updates",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Author UID" },
+        "authorName": { "type": "string", "description": "Display name of author" },
+        "authorPhoto": { "type": "string", "description": "Avatar of author" },
+        "content": { "type": "string", "description": "Text content of the post" },
+        "likes": { "type": "number", "description": "Count of likes" },
+        "likedBy": { "type": "array", "description": "List of UIDs who liked" },
+        "isJemal": { "type": "boolean", "description": "True if post is by Jemal Fano Haji" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Post timestamp" },
+        "videoUrl": { "type": "string", "description": "Optional video URL for the post" }
+      },
+      "required": ["userId", "authorName", "content", "createdAt"]
+    },
+    "comment": {
+      "title": "Comment",
+      "description": "User comment on a post",
+      "type": "object",
+      "properties": {
+        "postId": { "type": "string", "description": "ID of the post" },
+        "authorName": { "type": "string", "description": "Name of the commenter" },
+        "authorId": { "type": "string", "description": "UID of the commenter" },
+        "content": { "type": "string", "description": "Comment text content" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Comment timestamp" }
+      },
+      "required": ["postId", "authorName", "authorId", "content", "createdAt"]
+    },
+    "savedPost": {
+      "title": "Saved Post",
+      "description": "Post bookmarked by a user",
+      "type": "object",
+      "properties": {
+        "postId": { "type": "string", "description": "ID of the saved post" },
+        "savedAt": { "type": "string", "format": "date-time", "description": "Bookmark timestamp" }
+      },
+      "required": ["postId", "savedAt"]
+    },
+    "academy_book": {
+      "title": "Academy Book",
+      "description": "Educational books and materials uploaded by users",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "description": "Title of the book/material" },
+        "author": { "type": "string", "description": "Author or uploader name" },
+        "uploaderId": { "type": "string", "description": "UID of the uploader" },
+        "description": { "type": "string", "description": "Description of the book/material" },
+        "category": { "type": "string", "description": "Category of the book" },
+        "fileUrl": { "type": "string", "description": "Download URL or link of the PDF/document" },
+        "coverUrl": { "type": "string", "description": "Cover image URL" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Upload timestamp" }
+      },
+      "required": ["title", "author", "uploaderId", "createdAt"]
+    }
+  },
+  "firestore": {
+    "products": { "schema": "product", "description": "Marketplace products" },
+    "users": { "schema": "user", "description": "App users" },
+    "orders": { "schema": "order", "description": "User purchases" },
+    "posts": { "schema": "post", "description": "Community posts" },
+    "posts/{postId}/comments": { "schema": "comment", "description": "Comments on posts" },
+    "users/{userId}/savedPosts": { "schema": "savedPost", "description": "User bookmarked posts" },
+    "academy_books": { "schema": "academy_book", "description": "Academy books and documents" }
+  }
+}
