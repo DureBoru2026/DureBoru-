@@ -17,5 +17,6 @@ const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = initializeFirestore(app, {
   experimentalForceLongPolling: true,
-}, firebaseConfig.databaseId);
+  useFetchStreams: false,
+} as any, firebaseConfig.databaseId);
 export const storage = getStorage(app);

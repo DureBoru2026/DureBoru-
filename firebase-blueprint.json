@@ -86,6 +86,16 @@
       },
       "required": ["postId", "savedAt"]
     },
+    "wishlistItem": {
+      "title": "Wishlist Item",
+      "description": "Product added to wishlist by a user",
+      "type": "object",
+      "properties": {
+        "productId": { "type": "string", "description": "ID of the product" },
+        "addedAt": { "type": "string", "format": "date-time", "description": "Timestamp when added" }
+      },
+      "required": ["productId", "addedAt"]
+    },
     "academy_book": {
       "title": "Academy Book",
       "description": "Educational books and materials uploaded by users",
@@ -101,15 +111,32 @@
         "createdAt": { "type": "string", "format": "date-time", "description": "Upload timestamp" }
       },
       "required": ["title", "author", "uploaderId", "createdAt"]
+    },
+    "review": {
+      "title": "Review",
+      "description": "Star rating and text review for a product",
+      "type": "object",
+      "properties": {
+        "productId": { "type": "string", "description": "ID of the product" },
+        "userId": { "type": "string", "description": "UID of the reviewer" },
+        "authorName": { "type": "string", "description": "Name of the reviewer" },
+        "authorPhoto": { "type": "string", "description": "Avatar of reviewer" },
+        "rating": { "type": "number", "description": "Rating out of 5" },
+        "comment": { "type": "string", "description": "Review comment text" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Timestamp when reviewed" }
+      },
+      "required": ["productId", "userId", "authorName", "rating", "comment", "createdAt"]
     }
   },
   "firestore": {
     "products": { "schema": "product", "description": "Marketplace products" },
+    "products/{productId}/reviews": { "schema": "review", "description": "Product ratings and reviews" },
     "users": { "schema": "user", "description": "App users" },
     "orders": { "schema": "order", "description": "User purchases" },
     "posts": { "schema": "post", "description": "Community posts" },
     "posts/{postId}/comments": { "schema": "comment", "description": "Comments on posts" },
     "users/{userId}/savedPosts": { "schema": "savedPost", "description": "User bookmarked posts" },
+    "users/{userId}/wishlist": { "schema": "wishlistItem", "description": "User wishlisted products" },
     "academy_books": { "schema": "academy_book", "description": "Academy books and documents" }
   }
 }

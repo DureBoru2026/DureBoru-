@@ -46,6 +46,7 @@ import {
   ThumbsUp,
   Sparkles,
   PlayCircle,
+  Play,
   Filter,
   Star,
   FileText,
@@ -61,7 +62,8 @@ import {
   Phone,
   Navigation,
   Info,
-  Save
+  Save,
+  DollarSign
 } from "lucide-react";
 import { translations, Language } from "./translations";
 import { clsx, type ClassValue } from "clsx";
@@ -92,6 +94,10 @@ import {
 } from "recharts";
 import { AuthPage } from "./components/AuthPage";
 import { AdminPage } from "./components/AdminPage";
+import { AboutTimeline } from "./components/AboutTimeline";
+import { LazyImage } from "./components/LazyImage";
+import { WishlistPage } from "./components/WishlistPage";
+import { ProductDetailsModal } from "./components/ProductDetailsModal";
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -923,29 +929,86 @@ interface Comment {
 
 
 function ResponsiveVideoPlayer({ url }: { url: string }) {
+  const [isInView, setIsInView] = useState(false);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!url) return;
+
+    if (!("IntersectionObserver" in window)) {
+      setIsInView(true);
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setIsInView(true);
+          observer.disconnect();
+        }
+      },
+      {
+        rootMargin: "200px",
+      }
+    );
+
+    if (containerRef.current) {
+      observer.observe(containerRef.current);
+    }
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [url]);
+
   if (!url) return null;
   const isYouTube = url.includes("youtube.com") || url.includes("youtu.be");
   
   if (isYouTube) {
     const videoId = url.split("v=")[1]?.split("&")[0] || url.split("youtu.be/")[1]?.split("?")[0];
     return (
-      <div className="relative w-full overflow-hidden rounded-2xl bg-black" style={{ paddingTop: '56.25%' }}>
-        <iframe
-          className="absolute top-0 left-0 w-full h-full border-none"
-          src={`https://www.youtube.com/embed/${videoId}`}
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-          allowFullScreen
-        ></iframe>
+      <div 
+        ref={containerRef}
+        className="relative w-full overflow-hidden rounded-2xl bg-black" 
+        style={{ paddingTop: '56.25%' }}
+      >
+        {isInView ? (
+          <iframe
+            className="absolute top-0 left-0 w-full h-full border-none"
+            src={`https://www.youtube.com/embed/${videoId}`}
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+          ></iframe>
+        ) : (
+          <div className="absolute top-0 left-0 w-full h-full flex flex-col items-center justify-center gap-3 bg-gradient-to-br from-slate-900 to-black text-slate-400">
+            <div className="w-14 h-14 rounded-full bg-emerald-600/10 border border-emerald-500/20 flex items-center justify-center text-emerald-500 animate-pulse">
+              <Play size={24} className="ml-0.5" />
+            </div>
+            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Loading masterclass...</span>
+          </div>
+        )}
       </div>
     );
   }
 
   return (
-    <div className="relative w-full rounded-2xl overflow-hidden bg-black">
-      <video controls className="w-full h-auto max-h-[500px]">
-        <source src={url} />
-        Your browser does not support the video tag.
-      </video>
+    <div 
+      ref={containerRef}
+      className="relative w-full rounded-2xl overflow-hidden bg-black min-h-[200px] flex items-center justify-center"
+    >
+      {isInView ? (
+        <video controls className="w-full h-auto max-h-[500px]" preload="none">
+          <source src={url} />
+          Your browser does not support the video tag.
+        </video>
+      ) : (
+        <div className="flex flex-col items-center justify-center gap-3 text-slate-400 py-12">
+          <div className="w-14 h-14 rounded-full bg-emerald-600/10 border border-emerald-500/20 flex items-center justify-center text-emerald-500 animate-pulse">
+            <Video size={24} />
+          </div>
+          <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Loading video player...</span>
+        </div>
+      )}
     </div>
   );
 }
@@ -1099,17 +1162,6 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearchFocused, setIsSearchFocused] = useState(false);
 
-  // Wishlist State with Persistence
-  const [wishlist, setWishlist] = useState<string[]>(() => {
-    const saved = localStorage.getItem("dureboru_wishlist");
-    return saved ? JSON.parse(saved) : [];
-  });
-  const [showWishlistOnly, setShowWishlistOnly] = useState(false);
-
-  useEffect(() => {
-    localStorage.setItem("dureboru_wishlist", JSON.stringify(wishlist));
-  }, [wishlist]);
-
   // QR Code State
   const [showQR, setShowQR] = useState(false);
 
@@ -1157,11 +1209,34 @@ export default function App() {
   const [authError, setAuthError] = useState("");
   const [resetSent, setResetSent] = useState(false);
 
+  // Wishlist State with Persistence (Firestore & localStorage fallback)
+  const [wishlist, setWishlist] = useState<string[]>([]);
+  const [showWishlistOnly, setShowWishlistOnly] = useState(false);
+
+  useEffect(() => {
+    if (!user) {
+      const saved = localStorage.getItem("dureboru_wishlist");
+      setWishlist(saved ? JSON.parse(saved) : []);
+      return;
+    }
+    const q = query(collection(db, "users", user.uid, "wishlist"));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const ids = snapshot.docs.map(doc => doc.id);
+      setWishlist(ids);
+      localStorage.setItem("dureboru_wishlist", JSON.stringify(ids));
+    }, (err) => {
+      console.error("Error loading wishlist from Firestore:", err);
+    });
+    return () => unsubscribe();
+  }, [user]);
+
   // Marketplace State (Live)
   const [marketProducts, setMarketProducts] = useState<any[]>([]);
   const [marketLoading, setMarketLoading] = useState(true);
   const [marketSort, setMarketSort] = useState<"newest" | "price-low" | "price-high">("newest");
   const [marketCategory, setMarketCategory] = useState<string>("All");
+  const [maxPriceFilter, setMaxPriceFilter] = useState<number>(100000);
+  const [inStockOnly, setInStockOnly] = useState<boolean>(false);
   const [userOrders, setUserOrders] = useState<any[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
   const prevStatuses = useRef<Record<string, string>>({});
@@ -1170,6 +1245,7 @@ export default function App() {
   const [startDate, setStartDate] = useState<string>("");
   const [endDate, setEndDate] = useState<string>("");
   const [selectedProductForPurchase, setSelectedProductForPurchase] = useState<any | null>(null);
+  const [selectedProductForDetails, setSelectedProductForDetails] = useState<any | null>(null);
   const [purchaseNote, setPurchaseNote] = useState("");
   const [payerPhone, setPayerPhone] = useState("");
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<"telebirr" | "cbe">("telebirr");
@@ -1197,6 +1273,65 @@ export default function App() {
   const [expandedShippingOrders, setExpandedShippingOrders] = useState<Record<string, boolean>>({});
   const [promotions, setPromotions] = useState<any[]>([]);
   const EXCHANGE_RATE = 120; // 1 USD = 120 ETB (Mock)
+
+  // Web Share Product Action
+  const handleShareProduct = async (e: React.MouseEvent, item: any) => {
+    e.stopPropagation(); // Prevent opening product details or clicking other card components
+    
+    // Construct direct URL with product ID query parameter
+    const shareUrl = `${window.location.origin}${window.location.pathname}?product=${item.id}`;
+    const shareTitle = item.name;
+    const shareText = item.description || item.desc || `Check out ${item.name} on Dure Boru!`;
+
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: shareTitle,
+          text: shareText,
+          url: shareUrl,
+        });
+        addToast(
+          lang === "en" ? "Shared Successfully" : "Milkiidhaan Ergameera",
+          lang === "en" ? "Product link shared with friends!" : "Liinkiin oomishaa hiriyootaaf ergameera!",
+          "success"
+        );
+      } catch (err) {
+        console.log("Web Share failed or cancelled:", err);
+      }
+    } else {
+      // Fallback to clipboard copy
+      try {
+        await navigator.clipboard.writeText(shareUrl);
+        addToast(
+          lang === "en" ? "Link Copied" : "Liinkiin Garagalfameera",
+          lang === "en" ? "Product link copied to clipboard!" : "Liinkiin oomishaa qabduu garagalchaatti garagalfameera!",
+          "success"
+        );
+      } catch (err) {
+        console.error("Failed to copy link:", err);
+        addToast(
+          lang === "en" ? "Error" : "Dogoggora",
+          lang === "en" ? "Could not copy link." : "Liinkii garagalchuun hin danda'amne.",
+          "warning"
+        );
+      }
+    }
+  };
+
+  // Check URL query parameters for auto-opening product details
+  useEffect(() => {
+    if (!marketLoading && marketProducts.length > 0) {
+      const params = new URLSearchParams(window.location.search);
+      const productId = params.get("product");
+      if (productId) {
+        const found = marketProducts.find(p => p.id === productId);
+        if (found) {
+          setSelectedProductForDetails(found);
+          setActivePage("marketplace");
+        }
+      }
+    }
+  }, [marketLoading, marketProducts]);
 
   // Academy Books & Uploads State
   const [academyBooks, setAcademyBooks] = useState<any[]>([]);
@@ -2187,10 +2322,13 @@ export default function App() {
   const searchResults = getSearchResults();
 
   const allMarketProducts = [
-    ...marketProducts,
+    ...marketProducts.map(p => ({ ...p, inStock: p.inStock !== false })),
     ...t.marketplace.items
       .filter(staticItem => !marketProducts.some(p => p.name === staticItem.name))
-      .map((item, idx) => ({ ...item, id: `static-${idx}`, imageUrl: "" }))
+      .map((item, idx) => {
+        const isOut = item.name === "Agri-Drone Pro";
+        return { ...item, id: `static-${idx}`, imageUrl: "", inStock: !isOut };
+      })
   ];
 
   const sortedMarketplace = [...allMarketProducts].sort((a, b) => {
@@ -2199,14 +2337,58 @@ export default function App() {
     return 0;
   });
 
-  const toggleWishlist = (itemId: string) => {
+  const filteredMarketplace = sortedMarketplace.filter(p => {
+    if (showWishlistOnly && !wishlist.includes(p.id)) return false;
+    const matchCategory = marketCategory === "All" || p.category === marketCategory;
+    if (!matchCategory) return false;
+    if (p.price > maxPriceFilter) return false;
+    if (inStockOnly && !p.inStock) return false;
+    return true;
+  });
+
+  const toggleWishlist = async (itemId: string) => {
     const exists = wishlist.includes(itemId);
-    setWishlist(prev => 
-      exists 
-        ? prev.filter(id => id !== itemId) 
-        : [...prev, itemId]
-    );
-    alert(exists ? t.orders.wishlist.removed : t.orders.wishlist.added);
+    
+    if (user) {
+      try {
+        const wishRef = doc(db, "users", user.uid, "wishlist", itemId);
+        if (exists) {
+          await deleteDoc(wishRef);
+        } else {
+          await setDoc(wishRef, {
+            productId: itemId,
+            addedAt: new Date().toISOString(),
+          });
+        }
+        addToast(
+          lang === "en" ? "Wishlist Updated" : "Kufaama Haaromfame",
+          exists ? t.orders.wishlist.removed : t.orders.wishlist.added,
+          "success"
+        );
+      } catch (err) {
+        console.error("Error toggling wishlist in Firestore:", err);
+        // Fallback local if Firestore write fails
+        setWishlist(prev => 
+          exists 
+            ? prev.filter(id => id !== itemId) 
+            : [...prev, itemId]
+        );
+      }
+    } else {
+      // Guest local storage fallback
+      setWishlist(prev => {
+        const updated = exists 
+          ? prev.filter(id => id !== itemId) 
+          : [...prev, itemId];
+        localStorage.setItem("dureboru_wishlist", JSON.stringify(updated));
+        return updated;
+      });
+      addToast(
+        lang === "en" ? "Wishlist Updated" : "Kufaama Haaromfame",
+        exists ? t.orders.wishlist.removed : t.orders.wishlist.added,
+        "success"
+      );
+    }
   };
 
   const getWishlistItems = () => {
@@ -2289,6 +2471,7 @@ export default function App() {
               { id: "agriculture", label: t.nav.agriculture, icon: Leaf },
               { id: "academy", label: t.nav.academy, icon: GraduationCap },
               { id: "marketplace", label: t.nav.marketplace, icon: ShoppingBag },
+              { id: "wishlist", label: lang === "en" ? "Wishlist" : "Kufaama", icon: Heart },
               { id: "social", label: "Social", icon: MessageCircle },
               { id: "durePay", label: t.nav.durePay, icon: Wallet },
               { id: "about", label: t.nav.about, icon: Info },
@@ -2297,10 +2480,10 @@ export default function App() {
                 key={item.id}
                 onClick={() => setActivePage(item.id as Page)}
                 className={cn(
-                  "flex items-center gap-2 px-6 py-2.5 rounded-full text-xs font-black uppercase tracking-widest transition-all",
+                  "flex items-center gap-2 px-6 py-2.5 rounded-full text-xs font-bold uppercase tracking-widest transition-all duration-300 hover:scale-[1.05]",
                   activePage === item.id 
-                    ? "bg-blue-600 text-white shadow-sm" 
-                    : "text-slate-400 hover:text-blue-600"
+                    ? "bg-blue-600 text-white shadow-md shadow-blue-500/20 font-black" 
+                    : "text-slate-500 hover:text-blue-600 hover:bg-blue-50/50 font-bold"
                 )}
               >
                 <item.icon size={16} />
@@ -2311,10 +2494,10 @@ export default function App() {
               <button
                 onClick={() => setActivePage("admin")}
                 className={cn(
-                  "flex items-center gap-2 px-6 py-2.5 rounded-full text-xs font-black uppercase tracking-widest transition-all",
+                  "flex items-center gap-2 px-6 py-2.5 rounded-full text-xs font-bold uppercase tracking-widest transition-all duration-300 hover:scale-[1.05]",
                   activePage === "admin" 
-                    ? "bg-blue-600 text-white shadow-sm" 
-                    : "text-blue-600/60 hover:text-blue-600"
+                    ? "bg-blue-600 text-white shadow-md shadow-blue-500/20 font-black" 
+                    : "text-blue-600 hover:text-blue-700 hover:bg-blue-50/50 font-bold"
                 )}
               >
                 <ShieldCheck size={16} />
@@ -2525,12 +2708,12 @@ export default function App() {
                   { id: "agriculture", label: t.nav.agriculture, icon: Leaf },
                   { id: "academy", label: t.nav.academy, icon: GraduationCap },
                   { id: "marketplace", label: t.nav.marketplace, icon: ShoppingBag },
+                  { id: "wishlist", label: lang === "en" ? "Wishlist" : "Kufaama", icon: Heart },
                   { id: "social", label: t.social?.title, icon: Users2 },
                   { id: "durePay", label: t.nav.durePay, icon: Wallet },
                   { id: "about", label: t.nav.about, icon: Info },
                   ...(profile?.role === "admin" ? [{ id: "admin", label: "Admin", icon: ShieldCheck }] : []),
                   ...(user ? [
-                    { id: "wishlist", label: lang === "en" ? "Wishlist" : "Kufaama", icon: Heart },
                     { id: "orders", label: lang === "en" ? "Orders" : "Ajaja", icon: Clock },
                     { id: "profile", label: t.orders.profile.title, icon: User }
                   ] : []),
@@ -2699,7 +2882,7 @@ export default function App() {
           )}
 
           {activePage === "admin" && profile?.role === "admin" && (
-            <AdminPage products={marketProducts} lang={lang} />
+            <AdminPage products={marketProducts} lang={lang} addToast={addToast} />
           )}
 
           {activePage === "home" && (
@@ -3632,6 +3815,78 @@ export default function App() {
                 </div>
               </div>
 
+              {/* Price Range and In-Stock Filters Panel */}
+              <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+                {/* Price Range Slider */}
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-black uppercase tracking-widest text-slate-400 flex items-center gap-1.5">
+                      <DollarSign size={14} className="text-emerald-600" />
+                      {lang === "en" ? "Max Price Limit" : "Daangaa Gatii Olaanaa"}
+                    </span>
+                    <span className="text-xs font-black text-slate-900 bg-slate-50 px-3 py-1.5 rounded-full border border-slate-100 shadow-sm">
+                      {currency === "ETB" ? "ETB" : "$"} {
+                        currency === "ETB"
+                          ? maxPriceFilter.toLocaleString()
+                          : (maxPriceFilter / EXCHANGE_RATE).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })
+                      }
+                    </span>
+                  </div>
+                  <div className="relative flex items-center pt-2">
+                    <input
+                      type="range"
+                      min="0"
+                      max="100000"
+                      step="1000"
+                      value={maxPriceFilter}
+                      onChange={(e) => setMaxPriceFilter(Number(e.target.value))}
+                      className="w-full h-2 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-emerald-600 focus:outline-none"
+                    />
+                  </div>
+                  <div className="flex justify-between text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                    <span>{currency === "ETB" ? "0 ETB" : "$0"}</span>
+                    <span>{currency === "ETB" ? "100,000 ETB" : "$833"}</span>
+                  </div>
+                </div>
+
+                {/* Availability and Reset */}
+                <div className="flex flex-wrap items-center justify-between md:justify-end gap-6 border-t md:border-t-0 pt-6 md:pt-0 border-slate-100">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs font-black uppercase tracking-widest text-slate-400">
+                      {lang === "en" ? "In-Stock Only" : "Kanneen Harka Irra Jiran Qofa"}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setInStockOnly(!inStockOnly)}
+                      className={cn(
+                        "w-12 h-6 rounded-full transition-all duration-300 relative focus:outline-none border border-slate-200",
+                        inStockOnly ? "bg-emerald-600 border-emerald-600" : "bg-slate-100"
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          "absolute top-0.5 left-0.5 w-4.5 h-4.5 bg-white rounded-full transition-transform duration-300 shadow-md",
+                          inStockOnly ? "translate-x-6" : "translate-x-0"
+                        )}
+                      />
+                    </button>
+                  </div>
+
+                  {(maxPriceFilter !== 100000 || inStockOnly) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMaxPriceFilter(100000);
+                        setInStockOnly(false);
+                      }}
+                      className="px-5 py-3 bg-slate-900 hover:bg-black text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-md shadow-slate-900/10"
+                    >
+                      {lang === "en" ? "Reset Filters" : "Calaltuu Haqi"}
+                    </button>
+                  )}
+                </div>
+              </div>
+
               {/* Visual Category Filter Strip with Icons */}
               <div className="w-full bg-slate-50/50 rounded-3xl p-6 border border-slate-100">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
@@ -3743,7 +3998,7 @@ export default function App() {
                     <Loader2 className="animate-spin text-emerald-600" size={48} />
                     <p className="text-slate-400 font-black uppercase tracking-widest text-sm">Loading Marketplace...</p>
                   </div>
-                ) : (showWishlistOnly ? sortedMarketplace.filter(p => wishlist.includes(p.id)) : sortedMarketplace.filter(p => marketCategory === "All" || p.category === marketCategory)).length === 0 ? (
+                ) : filteredMarketplace.length === 0 ? (
                   <div className="col-span-full py-32 flex flex-col items-center justify-center gap-6">
                     <div className="w-20 h-20 bg-slate-50 rounded-3xl flex items-center justify-center text-slate-200">
                       {showWishlistOnly ? <Heart size={48} /> : <ShoppingBag size={48} />}
@@ -3751,7 +4006,7 @@ export default function App() {
                     <p className="text-slate-400 font-black uppercase tracking-widest text-sm">
                       {showWishlistOnly 
                         ? (lang === "en" ? "Your wishlist is empty." : "Kadhannaan kee duwwaadha.")
-                        : (lang === "en" ? "No products found yet." : "Oomishni hin argamne.")}
+                        : (lang === "en" ? "No products found matching filters." : "Oomishni calalame hin argamne.")}
                     </p>
                     {showWishlistOnly ? (
                       <button 
@@ -3761,27 +4016,46 @@ export default function App() {
                         {lang === "en" ? "Explore Marketplace" : "Gabaa Daawwadhu"}
                       </button>
                     ) : (
-                      profile?.role === "admin" && (
+                      (maxPriceFilter !== 100000 || inStockOnly) ? (
                         <button 
-                          onClick={() => setActivePage("admin")}
+                          onClick={() => {
+                            setMaxPriceFilter(100000);
+                            setInStockOnly(false);
+                          }}
                           className="text-emerald-600 font-black uppercase tracking-widest text-xs hover:underline"
                         >
-                          Add your first product
+                          {lang === "en" ? "Reset filters" : "Calaltuu Haqi"}
                         </button>
+                      ) : (
+                        profile?.role === "admin" && (
+                          <button 
+                            onClick={() => setActivePage("admin")}
+                            className="text-emerald-600 font-black uppercase tracking-widest text-xs hover:underline"
+                          >
+                            Add your first product
+                          </button>
+                        )
                       )
                     )}
                   </div>
                 ) : (
-                  (showWishlistOnly ? sortedMarketplace.filter(p => wishlist.includes(p.id)) : sortedMarketplace.filter(p => marketCategory === "All" || p.category === marketCategory)).map((item, i) => (
+                  filteredMarketplace.map((item, i) => (
                     <motion.div 
                       key={item.id} 
                       id={`product-card-${item.id}`}
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: i * 0.05 }}
-                      whileHover={{ y: -8, scale: 1.02 }}
-                      className="bg-white rounded-[3rem] overflow-hidden border border-slate-100 hover:border-emerald-200 transition-all group shadow-sm hover:shadow-2xl relative"
+                      transition={{ delay: i * 0.05, type: "spring", stiffness: 260, damping: 20 }}
+                      whileHover={{ y: -12, scale: 1.025 }}
+                      className="bg-white rounded-[3rem] overflow-hidden border border-slate-100 hover:border-emerald-300 transition-all duration-500 group shadow-sm hover:shadow-[0_25px_60px_-15px_rgba(16,185,129,0.2)] relative"
                     >
+                      <button 
+                        onClick={(e) => handleShareProduct(e, item)}
+                        className="absolute top-6 right-20 z-20 w-12 h-12 rounded-2xl bg-white text-slate-400 hover:text-emerald-600 flex items-center justify-center transition-all shadow-lg hover:scale-105 active:scale-95"
+                        title={lang === "en" ? "Share Product" : "Oomisha Qoodi"}
+                      >
+                        <Share2 size={20} />
+                      </button>
                       <button 
                         onClick={() => toggleWishlist(item.id)}
                         className={cn(
@@ -3793,9 +4067,9 @@ export default function App() {
                       >
                         <Heart size={24} fill={wishlist.includes(item.id) ? "currentColor" : "none"} />
                       </button>
-                      <div className="aspect-[4/5] bg-[#f8f9fa] relative overflow-hidden flex items-center justify-center cursor-pointer" onClick={() => item.imageUrl && setSelectedImage(item.imageUrl)}>
+                      <div className="aspect-[4/5] bg-[#f8f9fa] relative overflow-hidden flex items-center justify-center cursor-pointer" onClick={() => setSelectedProductForDetails(item)}>
                         {item.imageUrl ? (
-                          <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover group-hover:scale-110 transition-all duration-700" />
+                          <LazyImage src={item.imageUrl} alt={item.name} className="w-full h-full object-cover group-hover:scale-110 transition-all duration-700" />
                         ) : (
                           <div className="w-24 h-24 bg-white rounded-3xl shadow-lg flex items-center justify-center text-slate-200 group-hover:text-emerald-500 transition-all group-hover:rotate-12">
                             <ShoppingBag size={48} />
@@ -3804,8 +4078,31 @@ export default function App() {
                       </div>
                       <div className="p-8 space-y-6">
                         <div className="space-y-1">
-                          <h4 className="font-black text-xl text-slate-900">{item.name}</h4>
-                          <p className="text-sm font-bold text-emerald-600 uppercase tracking-widest line-clamp-1">{item.category}</p>
+                          <div className="flex items-start justify-between gap-2">
+                            <h4 className="font-black text-xl text-slate-900 leading-tight cursor-pointer hover:text-emerald-600 transition-colors" onClick={() => setSelectedProductForDetails(item)}>{item.name}</h4>
+                            {item.inStock ? (
+                              <span className="text-[9px] bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-md font-black uppercase tracking-wider border border-emerald-100 flex-shrink-0">
+                                {lang === "en" ? "In Stock" : "Jira"}
+                              </span>
+                            ) : (
+                              <span className="text-[9px] bg-rose-50 text-rose-600 px-2 py-0.5 rounded-md font-black uppercase tracking-wider border border-rose-100 flex-shrink-0">
+                                {lang === "en" ? "Out Of Stock" : "Dhumeera"}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                            <p className="text-sm font-bold text-emerald-600 uppercase tracking-widest line-clamp-1">{item.category}</p>
+                            <button 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedProductForDetails(item);
+                              }}
+                              className="flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-emerald-600 transition-colors"
+                            >
+                              <Star size={10} className="text-amber-400 fill-amber-400" />
+                              <span>{lang === "en" ? "Reviews" : "Madaallii"}</span>
+                            </button>
+                          </div>
                         </div>
                         <div className="flex justify-between items-center pt-2">
                           <span className="text-2xl font-black tracking-tighter">
@@ -3816,11 +4113,23 @@ export default function App() {
                             }
                           </span>
                           <button 
+                            disabled={!item.inStock}
                             onClick={() => handleBuyProduct(item)}
-                            className="bg-emerald-600 text-white px-6 py-3 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-emerald-700 transition-all flex items-center gap-2 shadow-lg shadow-emerald-900/10"
+                            className={cn(
+                              "px-6 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center gap-2 shadow-lg",
+                              item.inStock 
+                                ? "bg-emerald-600 text-white hover:bg-emerald-700 shadow-emerald-900/10" 
+                                : "bg-slate-100 text-slate-400 cursor-not-allowed shadow-none border border-slate-200"
+                            )}
                           >
-                            <ArrowRight size={14} />
-                            {lang === "en" ? "Buy Now" : "Amma Bitadhu"}
+                            {item.inStock ? (
+                              <>
+                                <ArrowRight size={14} />
+                                {lang === "en" ? "Buy Now" : "Amma Bitadhu"}
+                              </>
+                            ) : (
+                              lang === "en" ? "Sold Out" : "Dhumeera"
+                            )}
                           </button>
                         </div>
                       </div>
@@ -4250,84 +4559,14 @@ export default function App() {
           )}
 
           {activePage === "wishlist" && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="max-w-7xl mx-auto"
-            >
-              <div className="mb-12">
-                <h1 className="text-5xl font-black tracking-tighter text-slate-900 mb-2">
-                  {t.orders.wishlist.title}
-                </h1>
-                <p className="text-slate-500 font-medium italic">
-                  {lang === "en" ? "Items you've saved for later." : "Meeshaalee boodaaf olkaawwatan."}
-                </p>
-              </div>
-
-              {wishlistItems.length === 0 ? (
-                <div className="bg-white p-20 rounded-[3rem] border border-slate-100 flex flex-col items-center gap-6 shadow-sm">
-                   <div className="w-20 h-20 bg-rose-50 rounded-3xl flex items-center justify-center text-rose-200">
-                      <Heart size={48} />
-                    </div>
-                    <p className="text-slate-400 font-black uppercase tracking-widest text-sm text-center">
-                      {t.orders.wishlist.empty}
-                    </p>
-                    <button 
-                      onClick={() => setActivePage("marketplace")}
-                      className="px-10 py-5 bg-slate-900 text-white rounded-full font-black text-xs uppercase tracking-widest hover:bg-black transition-all shadow-xl"
-                    >
-                      {t.hero.browse}
-                    </button>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {wishlistItems.map((item, idx) => (
-                    <motion.div 
-                      key={idx}
-                      initial={{ opacity: 0, scale: 0.9 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      transition={{ delay: idx * 0.1 }}
-                      className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm hover:shadow-xl transition-all group flex flex-col justify-between"
-                    >
-                      <div className="space-y-4">
-                        <div className="flex justify-between items-start">
-                          <div className="w-14 h-14 bg-slate-50 rounded-2xl flex items-center justify-center text-emerald-600 group-hover:scale-110 transition-transform">
-                            {item.type === "Academy" ? <GraduationCap size={28} /> : item.type === "Agriculture" ? <Leaf size={28} /> : <ShoppingBag size={28} />}
-                          </div>
-                          <button 
-                            onClick={() => toggleWishlist(item.id)}
-                            className="p-3 bg-rose-50 text-rose-500 rounded-full hover:bg-rose-500 hover:text-white transition-all shadow-sm"
-                          >
-                            <X size={18} />
-                          </button>
-                        </div>
-                        <div>
-                          <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600 mb-1">{item.type}</p>
-                          <h3 className="text-xl font-black text-slate-900 leading-tight group-hover:text-emerald-600 transition-colors">{item.name}</h3>
-                          <p className="text-sm text-slate-500 mt-2 line-clamp-2">{item.desc}</p>
-                        </div>
-                      </div>
-                      
-                      <div className="mt-8 pt-6 border-t border-slate-50 flex items-center justify-between">
-                        <p className="text-xl font-black text-slate-900">{item.price ? `${item.price.toLocaleString()} ETB` : "Free"}</p>
-                        <button 
-                          onClick={() => {
-                            if (item.type === "Marketplace") {
-                              handleBuyProduct(item);
-                            } else {
-                              setActivePage(item.type === "Academy" ? "academy" : "agriculture");
-                            }
-                          }}
-                          className="flex items-center gap-2 bg-[#111] text-white px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-emerald-600 transition-all shadow-lg"
-                        >
-                          {t.orders.wishlist.moveToCart}
-                        </button>
-                      </div>
-                    </motion.div>
-                  ))}
-                </div>
-              )}
-            </motion.div>
+            <WishlistPage
+              wishlistItems={wishlistItems}
+              toggleWishlist={toggleWishlist}
+              handleBuyProduct={handleBuyProduct}
+              setActivePage={setActivePage}
+              lang={lang}
+              translations={translations[lang]}
+            />
           )}
 
           {activePage === "profile" && (
@@ -4430,6 +4669,32 @@ export default function App() {
                         </div>
                       </div>
                     </div>
+
+                    {profile?.role === "admin" && (
+                      <div className="mt-8 p-8 bg-gradient-to-r from-blue-900 to-slate-900 rounded-[2.5rem] border border-blue-800 text-white flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden">
+                        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(59,130,246,0.15),transparent_40%)] pointer-events-none" />
+                        <div className="space-y-2 text-center md:text-left relative z-10">
+                          <span className="px-3 py-1 bg-blue-500/10 text-blue-300 border border-blue-500/20 text-[9px] font-black uppercase tracking-widest rounded-full">
+                            Authorized Administrator
+                          </span>
+                          <h4 className="text-xl font-black tracking-tight text-white">System Settings & Reports Available</h4>
+                          <p className="text-xs text-slate-300 font-medium max-w-xl">
+                            {lang === "en"
+                              ? "As an admin, you can manage e-commerce products, newsletter lists, client-side orders, and download official setup guides."
+                              : "Akka bulchaatti, oomishoota gabayaa, miseensota daddabaloo, ajajawwan gabayaa, fi gabaasa sirnaa buufachuu dandeessu."}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => {
+                            setActivePage("admin");
+                            window.scrollTo({ top: 0, behavior: "smooth" });
+                          }}
+                          className="w-full md:w-auto px-8 py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-xl shadow-blue-600/10 hover:scale-[1.03] active:scale-[0.97] cursor-pointer relative z-10 whitespace-nowrap"
+                        >
+                          Open Admin Panel
+                        </button>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   /* Editable Mode Form */
@@ -5317,6 +5582,9 @@ export default function App() {
                 </div>
               </div>
 
+              {/* Timeline Section */}
+              <AboutTimeline lang={lang} />
+
               {/* Foundational Leader Section */}
               <div className="bg-slate-900 text-white rounded-[4rem] p-10 md:p-16 relative overflow-hidden shadow-2xl animate-none">
                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(16,185,129,0.1),transparent_50%)] pointer-events-none" />
@@ -6031,6 +6299,25 @@ export default function App() {
           ))}
         </AnimatePresence>
       </div>
+
+      {/* Product Details & Reviews Modal */}
+      <AnimatePresence>
+        {selectedProductForDetails && (
+          <ProductDetailsModal
+            product={selectedProductForDetails}
+            onClose={() => setSelectedProductForDetails(null)}
+            user={user}
+            profile={profile}
+            wishlist={wishlist}
+            toggleWishlist={toggleWishlist}
+            handleBuyProduct={handleBuyProduct}
+            currency={currency}
+            EXCHANGE_RATE={EXCHANGE_RATE}
+            lang={lang}
+            addToast={addToast}
+          />
+        )}
+      </AnimatePresence>
 
       {/* Lightbox Modal */}
       <AnimatePresence>
